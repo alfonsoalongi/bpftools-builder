@@ -53,8 +53,8 @@ jobs:
         working-directory: ./src
         run: |
           set -e
-          # trova l’unica cartella android-ndk-* creata dallo script
-          NDK_DIR=$(ls -d $PWD/android-ndk-*)
+          # trova la cartella NDK scaricata nella directory superiore
+          NDK_DIR=$(ls -d ../android-ndk-*)
           echo "Using NDK_DIR=$NDK_DIR"
           make bpftools NDK_ARCH=arm64 NDK_PATH=$NDK_DIR
           cp bpftools-arm64.tar.gz $GITHUB_WORKSPACE/
