@@ -2,50 +2,50 @@ name: Build bpftools archive (arm64)
 
 on:
   push:
-    tags: [ 'v*' ]          # es. v1.1.0
+    tags: [ 'v*' ]          # e.g. v1.2.0
   workflow_dispatch:
 
 jobs:
   build_bpftools:
     runs-on: ubuntu-22.04
-    name: Build bpftools-arm64
     timeout-minutes: 240
-
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4   # repo vuoto, serve solo .github/
 
-      # 0) swap di sicurezza
+      # 0) Swap per evitare OOM
       - name: Add swap
         run: |
           sudo fallocate -l 8G /swapfile
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile
-          free -h
 
-      # 1) clone ExtendedAndroidTools (shallow)
+      # 1) Clona ExtendedAndroidTools in ./src
       - name: Clone upstream
-        run: git clone --depth 1 https://github.com/facebookexperimental/ExtendedAndroidTools.git .
+        run: git clone --depth 1 https://github.com/facebookexperimental/ExtendedAndroidTools.git src
 
-      # 2) deps host (script originale)
+      # 2) Dipendenze host
       - name: Install dependencies
-        run: sudo ./scripts/jammy-install-deps.sh
+        run: sudo ./src/scripts/jammy-install-deps.sh
 
-      # 3) scarica NDK (r26b)
+      # 3) Scarica NDK
       - name: Setup NDK
-        run: ./scripts/download-ndk.sh
+        run: ./src/scripts/download-ndk.sh
 
-      # 4) build bpftools per arm64 (il target originale)
+      # 4) Build bpftools arm64
       - name: Build
-        run: make bpftools NDK_ARCH=arm64
+        working-directory: ./src
+        run: |
+          make bpftools NDK_ARCH=arm64
+          cp bpftools-arm64.tar.gz $GITHUB_WORKSPACE/
 
-      # 5) carica l’artefact temporaneo (come upstream)
+      # 5) Artifact temporaneo
       - uses: actions/upload-artifact@v4
         with:
           name: bpftools-arm64.tar.gz
           path: bpftools-arm64.tar.gz
 
-      # 6) allega alla Release (solo sui tag v*)
+      # 6) Asset permanente su Release (solo tag v*)
       - name: Upload Release asset
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
