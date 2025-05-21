@@ -1,70 +1,60 @@
-name: Build & Release bpftools (upstream workflow)
+name: Build & release bpftools (arm64)
 
 on:
   push:
-    tags: [ 'v*' ]          # es. v0.1.0
-  workflow_dispatch:        # avvio manuale
+    tags: [ 'v*' ]          # e.g. v0.1.0
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-    strategy:
-      matrix:
-        arch: [ arm64 ]
+    timeout-minutes: 240      # 4 h hard-limit
 
     steps:
-      # workspace (il tuo repo, può essere vuoto)
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      # 1) Clona ExtendedAndroidTools (shallow)
-      - name: Clone ExtendedAndroidTools
-        run: |
-          git clone --depth 1 https://github.com/facebookexperimental/ExtendedAndroidTools.git src
-          echo "SRC_DIR=$PWD/src" >> $GITHUB_ENV
+    # Extra 8 GB swap to survive LLVM link step
+    - name: Add swap
+      run: |
+        sudo fallocate -l 8G /swapfile
+        sudo chmod 600 /swapfile
+        sudo mkswap /swapfile
+        sudo swapon /swapfile
+        free -h
 
-      # 2) Dipendenze host identiche all'upstream
-      - name: Install host dependencies
-        run: sudo $SRC_DIR/scripts/jammy-install-deps.sh
+    # Clone ExtendedAndroidTools (shallow)
+    - name: Clone upstream
+      run: |
+        git clone --depth 1 https://github.com/facebookexperimental/ExtendedAndroidTools.git src
+        echo "SRC_DIR=$PWD/src" >> $GITHUB_ENV
 
-      # 3) Scarica l'NDK (uguale all'upstream)
-      - name: Download Android NDK
-        run: $SRC_DIR/scripts/download-ndk.sh
+    # Host deps (same as upstream)
+    - name: Install deps
+      run: sudo $SRC_DIR/scripts/jammy-install-deps.sh
 
-      # 4) Build bpftools per arch
-      - name: Build bpftools (${{ matrix.arch }})
-        working-directory: ${{ env.SRC_DIR }}
-        run: make bpftools NDK_PATH=$PWD/android-ndk-r27b NDK_ARCH=${{ matrix.arch }} THREADS=$(nproc)
+    # Download NDK once
+    - name: Download NDK
+      run: $SRC_DIR/scripts/download-ndk.sh
 
-      # 5) Copia output in dist/
-      - name: Collect artifacts
-        run: |
-          mkdir -p dist
-          cp $SRC_DIR/bpftools-${{ matrix.arch }}.tar.gz dist/
+    # Build bpftools for arm64 with limited parallelism
+    - name: Build bpftools (arm64)
+      working-directory: ${{ env.SRC_DIR }}
+      run: |
+        make bpftools NDK_PATH=$PWD/android-ndk-r27b NDK_ARCH=arm64 THREADS=4
+        cp bpftools-arm64.tar.gz $GITHUB_WORKSPACE/
 
-      # 6) Checksum (solo una volta)
-      - name: Generate SHA256SUMS
-        if: matrix.arch == 'arm64'
-        run: |
-          cd dist
-          sha256sum bpftools-*.tar.gz > SHA256SUMS
+    # Checksums
+    - name: SHA256SUMS
+      run: |
+        cd $GITHUB_WORKSPACE
+        sha256sum bpftools-arm64.tar.gz > SHA256SUMS
 
-      # 7) Artifact temporaneo (debug, 90 gg)
-      - uses: actions/upload-artifact@v4
-        with:
-          name: bpftools-${{ matrix.arch }}
-          path: dist/bpftools-${{ matrix.arch }}.tar.gz
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with: { path: dist }
-
-      - name: Attach files to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/bpftools-arm64.tar.gz
-            dist/SHA256SUMS
-          generate_release_notes: true
+    # Upload as release assets (only on tag)
+    - name: Release
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          bpftools-arm64.tar.gz
+          SHA256SUMS
+        generate_release_notes: true
