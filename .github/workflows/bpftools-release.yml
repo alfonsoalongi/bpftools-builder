@@ -1,69 +1,54 @@
-name: Build bpftools-arm64
+name: Build bpftools archive (arm64)
 
-# parte su ogni tag “v*” oppure manualmente da Actions
 on:
   push:
-    tags: [ 'v*' ]
+    tags: [ 'v*' ]          # es. v1.1.0
   workflow_dispatch:
 
 jobs:
   build_bpftools:
     runs-on: ubuntu-22.04
+    name: Build bpftools-arm64
     timeout-minutes: 240
 
     steps:
-    # 0) serve solo la cartella del workflow (repo può essere vuoto)
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    # 1) +8 GB di swap per evitare OOM in fase LLVM
-    - name: Add swap
-      run: |
-        sudo fallocate -l 8G /swapfile
-        sudo chmod 600 /swapfile
-        sudo mkswap /swapfile
-        sudo swapon /swapfile
-        free -h
+      # 0) swap di sicurezza
+      - name: Add swap
+        run: |
+          sudo fallocate -l 8G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          free -h
 
-    # 2) clona ExtendedAndroidTools (shallow)
-    - name: Clone ExtendedAndroidTools
-      run: |
-        git clone --depth 1 https://github.com/facebookexperimental/ExtendedAndroidTools.git src
+      # 1) clone ExtendedAndroidTools (shallow)
+      - name: Clone upstream
+        run: git clone --depth 1 https://github.com/facebookexperimental/ExtendedAndroidTools.git .
 
-    # 3) dipendenze host (script upstream)
-    - name: Install dependencies
-      run: sudo src/scripts/jammy-install-deps.sh
+      # 2) deps host (script originale)
+      - name: Install dependencies
+        run: sudo ./scripts/jammy-install-deps.sh
 
-    # 4) scarica l’NDK (r26b: è quello che lo script prende di default)
-    - name: Setup NDK
-      run: src/scripts/download-ndk.sh
+      # 3) scarica NDK (r26b)
+      - name: Setup NDK
+        run: ./scripts/download-ndk.sh
 
-    # 5) build host-toolchain, poi cancella build/host per liberare spazio
-    - name: Build host tool-chain & clean
-      working-directory: src
-      run: |
-        make host-llvm host-clang host-python THREADS=4
-        rm -rf build/host          # libera ~7 GB
-        df -h .
+      # 4) build bpftools per arm64 (il target originale)
+      - name: Build
+        run: make bpftools NDK_ARCH=arm64
 
-    # 6) build bpftools per Android arm64 (THREADS=4)
-    - name: Build bpftools-arm64
-      working-directory: src
-      run: |
-        make bpftools NDK_ARCH=arm64 THREADS=4
-        cp bpftools-arm64.tar.gz $GITHUB_WORKSPACE/
+      # 5) carica l’artefact temporaneo (come upstream)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bpftools-arm64.tar.gz
+          path: bpftools-arm64.tar.gz
 
-    # 7) checksum
-    - name: SHA256
-      run: |
-        cd $GITHUB_WORKSPACE
-        sha256sum bpftools-arm64.tar.gz > SHA256SUMS
-
-    # 8) rilascia asset permanenti (solo se è un tag “v*”)
-    - name: Upload Release asset
-      if: startsWith(github.ref, 'refs/tags/v')
-      uses: softprops/action-gh-release@v2
-      with:
-        files: |
-          bpftools-arm64.tar.gz
-          SHA256SUMS
-        generate_release_notes: true
+      # 6) allega alla Release (solo sui tag v*)
+      - name: Upload Release asset
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: bpftools-arm64.tar.gz
+          generate_release_notes: true
