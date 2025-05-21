@@ -2,53 +2,87 @@ name: Build bpftools archive (arm64)
 
 on:
   push:
-    tags: [ 'v*' ]          # e.g. v1.2.0
-  workflow_dispatch:
+    tags: [ 'v*' ]          # es. v1.3.0
+  workflow_dispatch:        # avvio manuale se serve
 
 jobs:
   build_bpftools:
     runs-on: ubuntu-22.04
     timeout-minutes: 240
     steps:
-      - uses: actions/checkout@v4   # repo vuoto, serve solo .github/
+      ######################################################################
+      # 0) Il tuo repo (può essere vuoto) – serve solo per avere .github/   #
+      ######################################################################
+      - uses: actions/checkout@v4
 
-      # 0) Swap per evitare OOM
+      ##############################################################
+      # 1) Aggiungi 8 GB di swap per evitare OOM durante il link    #
+      ##############################################################
       - name: Add swap
         run: |
           sudo fallocate -l 8G /swapfile
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile
+          free -h
 
-      # 1) Clona ExtendedAndroidTools in ./src
-      - name: Clone upstream
+      ##############################################################
+      # 2) Clona ExtendedAndroidTools in ./src (shallow)            #
+      ##############################################################
+      - name: Clone ExtendedAndroidTools
         run: git clone --depth 1 https://github.com/facebookexperimental/ExtendedAndroidTools.git src
 
-      # 2) Dipendenze host
+      ##############################################################
+      # 3) Installa le dipendenze host (script upstream)            #
+      ##############################################################
       - name: Install dependencies
         run: sudo ./src/scripts/jammy-install-deps.sh
 
-      # 3) Scarica NDK
+      ##############################################################
+      # 4) Scarica l’NDK (di default r26b)                          #
+      ##############################################################
       - name: Setup NDK
         run: ./src/scripts/download-ndk.sh
 
-      # 4) Build bpftools arm64
-      - name: Build
+      ########################################################################
+      # 5) Build bpftools per Android arm64                                  #
+      #    • individua al volo la cartella NDK appena estratta               #
+      #    • passa NDK_PATH così cmake trova android.toolchain.cmake         #
+      ########################################################################
+      - name: Build bpftools (arm64)
         working-directory: ./src
         run: |
-          make bpftools NDK_ARCH=arm64
+          set -e
+          # trova l’unica cartella android-ndk-* creata dallo script
+          NDK_DIR=$(ls -d $PWD/android-ndk-*)
+          echo "Using NDK_DIR=$NDK_DIR"
+          make bpftools NDK_ARCH=arm64 NDK_PATH=$NDK_DIR
           cp bpftools-arm64.tar.gz $GITHUB_WORKSPACE/
 
-      # 5) Artifact temporaneo
+      ##############################################################
+      # 6) Genera SHA256                                           #
+      ##############################################################
+      - name: SHA256
+        run: |
+          cd $GITHUB_WORKSPACE
+          sha256sum bpftools-arm64.tar.gz > SHA256SUMS
+
+      ##############################################################
+      # 7) Artifact temporaneo (debug)                             #
+      ##############################################################
       - uses: actions/upload-artifact@v4
         with:
           name: bpftools-arm64.tar.gz
           path: bpftools-arm64.tar.gz
 
-      # 6) Asset permanente su Release (solo tag v*)
+      ##############################################################
+      # 8) Asset permanente in Release (solo sui tag v*)           #
+      ##############################################################
       - name: Upload Release asset
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: bpftools-arm64.tar.gz
+          files: |
+            bpftools-arm64.tar.gz
+            SHA256SUMS
           generate_release_notes: true
