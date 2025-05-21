@@ -1,19 +1,20 @@
-name: Build & release bpftools (arm64)
+name: Build & Release bpftools-arm64
 
 on:
   push:
-    tags: [ 'v*' ]          # e.g. v0.1.0
-  workflow_dispatch:
+    tags: [ 'v*' ]          # parte SOLO su tag tipo v0.1.0
+  workflow_dispatch:        # avvio manuale su main
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 240      # 4 h hard-limit
+    timeout-minutes: 240          # 4 h di margine
 
     steps:
+    # 0. Repo host (può essere vuoto, serve solo la cartella .github/)
     - uses: actions/checkout@v4
 
-    # Extra 8 GB swap to survive LLVM link step
+    # 1. +8 GB di swap per evitare OOM nel link di LLVM
     - name: Add swap
       run: |
         sudo fallocate -l 8G /swapfile
@@ -22,35 +23,39 @@ jobs:
         sudo swapon /swapfile
         free -h
 
-    # Clone ExtendedAndroidTools (shallow)
-    - name: Clone upstream
+    # 2. Clona ExtendedAndroidTools (shallow, ultimo commit main)
+    - name: Clone ExtendedAndroidTools
       run: |
         git clone --depth 1 https://github.com/facebookexperimental/ExtendedAndroidTools.git src
         echo "SRC_DIR=$PWD/src" >> $GITHUB_ENV
 
-    # Host deps (same as upstream)
-    - name: Install deps
+    # 3. Dipendenze host identiche all’upstream
+    - name: Install host dependencies
       run: sudo $SRC_DIR/scripts/jammy-install-deps.sh
 
-    # Download NDK once
-    - name: Download NDK
+    # 4. Scarica l’NDK (script upstream → crea ./android-ndk-r26b)
+    - name: Download Android NDK (r26b)
       run: $SRC_DIR/scripts/download-ndk.sh
 
-    # Build bpftools for arm64 with limited parallelism
+    # 5. Individua la cartella NDK appena scaricata
+    - name: Set NDK_DIR env
+      run: echo "NDK_DIR=$(ls -d $PWD/android-ndk-*/)" >> $GITHUB_ENV
+
+    # 6. Compila bpftools per arm64 (THREADS limitato = meno RAM)
     - name: Build bpftools (arm64)
       working-directory: ${{ env.SRC_DIR }}
       run: |
-        make bpftools NDK_PATH=$PWD/android-ndk-r27b NDK_ARCH=arm64 THREADS=4
+        make bpftools NDK_PATH=${{ env.NDK_DIR }} NDK_ARCH=arm64 THREADS=4
         cp bpftools-arm64.tar.gz $GITHUB_WORKSPACE/
 
-    # Checksums
-    - name: SHA256SUMS
+    # 7. SHA-256
+    - name: Generate checksum
       run: |
         cd $GITHUB_WORKSPACE
         sha256sum bpftools-arm64.tar.gz > SHA256SUMS
 
-    # Upload as release assets (only on tag)
-    - name: Release
+    # 8. Allegati permanenti (solo se push è un tag v*)
+    - name: Publish GitHub Release
       if: startsWith(github.ref, 'refs/tags/v')
       uses: softprops/action-gh-release@v2
       with:
