@@ -45,7 +45,14 @@ cd ExtendedAndroidTools
 # Run the environment
 ./scripts/run-docker-build-env.sh
 # Create the artifact in out/archives/bpftools-arm64.tar.gz
+
+# All solutions does not work
 make bpftools THREADS=$(nproc)
+make bpftools-min THREADS=$(nproc)
+
+
+make llvm LLVM_EXTRA_CMAKE_FLAGS='-DLLVM_BUILD_LLVM_DYLIB=ON -DLLVM_LINK_LLVM_DYLIB=ON' 
+make bpftools
 ```
 
 ## Extra goodies
