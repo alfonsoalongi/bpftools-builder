@@ -1,0 +1,65 @@
+name: Build & release bpftools
+
+on:
+  push:
+    tags: [ 'v*' ]         # es. v0.1.0
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [ arm64, x86_64 ]
+
+    steps:
+    - name: Checkout (this repo, just for the workflow)
+      uses: actions/checkout@v4
+
+    - name: Clone ExtendedAndroidTools
+      run: |
+        git clone --depth 1 https://github.com/facebookexperimental/ExtendedAndroidTools.git
+        cd ExtendedAndroidTools
+        echo "EXT_DIR=$(pwd)" >> $GITHUB_ENV
+
+    - name: Build Docker image
+      working-directory: ${{ env.EXT_DIR }}
+      run: ./scripts/build-docker-image.sh
+
+    - name: Build bpftools (${{ matrix.arch }})
+      working-directory: ${{ env.EXT_DIR }}
+      run: |
+        ./scripts/run-docker-build-env.sh <<'EOF'
+        make bpftools NDK_ARCH=${{ matrix.arch }} THREADS=$(nproc)
+        EOF
+
+    - name: Collect artifacts
+      run: |
+        mkdir -p dist
+        cp ${{ env.EXT_DIR }}/out/archives/bpftools-${{ matrix.arch }}.tar.gz dist/
+
+    - name: Generate checksums (once)
+      if: matrix.arch == 'arm64'
+      run: |
+        sha256sum dist/*.tar.gz > dist/SHA256SUMS
+
+    - name: Upload build artifacts (for debugging, auto-expires)
+      uses: actions/upload-artifact@v4
+      with:
+        name: bpftools-${{ matrix.arch }}
+        path: dist/bpftools-${{ matrix.arch }}.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/download-artifact@v4
+      with: { path: dist }
+
+    - name: Attach to GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          dist/bpftools-arm64.tar.gz
+          dist/bpftools-x86_64.tar.gz
+          dist/SHA256SUMS
+        generate_release_notes: true
