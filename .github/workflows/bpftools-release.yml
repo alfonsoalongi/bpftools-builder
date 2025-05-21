@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        arch: [ arm64, x86_64 ]
+        arch: [ arm64 ]
 
     steps:
       # workspace (il tuo repo, può essere vuoto)
@@ -66,6 +66,5 @@ jobs:
         with:
           files: |
             dist/bpftools-arm64.tar.gz
-            dist/bpftools-x86_64.tar.gz
             dist/SHA256SUMS
           generate_release_notes: true
