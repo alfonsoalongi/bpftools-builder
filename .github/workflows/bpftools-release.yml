@@ -20,7 +20,7 @@ jobs:
       ##############################################################
       - name: Add swap
         run: |
-          sudo fallocate -l 4G /swapfile
+          sudo fallocate -l 2G /swapfile
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile
@@ -53,10 +53,10 @@ jobs:
         working-directory: ./src
         run: |
           set -e
-          # trova la cartella NDK scaricata nella directory superiore
+          export GIT_DEPTH=0          # <<— clone completo per bpftrace
           NDK_DIR=$(ls -d ../android-ndk-*)
           echo "Using NDK_DIR=$NDK_DIR"
-          make bpftools NDK_ARCH=arm64 NDK_PATH=$NDK_DIR
+          make bpftools NDK_ARCH=arm64 NDK_PATH=$NDK_DIR THREADS=4
           cp bpftools-arm64.tar.gz $GITHUB_WORKSPACE/
 
       ##############################################################
