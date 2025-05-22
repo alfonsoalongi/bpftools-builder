@@ -53,11 +53,22 @@ jobs:
         working-directory: ./src
         run: |
           set -e
-          export GIT_DEPTH=0          # <<— clone completo per bpftrace
+
+          # keep-alive: stampa un ping ogni 5 minuti
+          ( while true; do
+              echo "::notice ::⏳ $(date -u) — build alive"
+              sleep 300
+            done ) &
+          WATCH=$!
+
+          # trova NDK e compila con 2 thread
           NDK_DIR=$(ls -d ../android-ndk-*)
           echo "Using NDK_DIR=$NDK_DIR"
-          make bpftools NDK_ARCH=arm64 NDK_PATH=$NDK_DIR THREADS=4
+          make bpftools NDK_ARCH=arm64 NDK_PATH=$NDK_DIR THREADS=2
+
+          kill $WATCH
           cp bpftools-arm64.tar.gz $GITHUB_WORKSPACE/
+
 
       ##############################################################
       # 6) Genera SHA256                                           #
