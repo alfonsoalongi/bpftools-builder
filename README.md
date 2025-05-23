@@ -64,6 +64,8 @@ make llvm HOST_ONLY=1   LLVM_EXTRA_CMAKE_FLAGS='-DLLVM_BUILD_LLVM_DYLIB=ON -DLLV
 
 # Build bpftools for Android ARM64
 make bpftools NDK_ARCH=arm64 THREADS=$(nproc)
+# or
+make bpftools-min NDK_ARCH=arm64 THREADS=$(nproc) 
 ```
 
 ---
