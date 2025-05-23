@@ -16,7 +16,10 @@ It builds **bpftools** for **Android ARM64 (aarch64)** and publishes the resulti
 
 ## Current status
 
-* **GitHub Actions workflow** – aims to build the archive automatically **but is currently failing** (Reasons under investigation).
+* **GitHub Actions workflow** – automatically builds `bpftools-arm64.tar.gz`, publishes it as a Release asset **and** keeps a zipped artefact for debugging.
+* **Manual steps (below)** – tested and working; useful when you need a local build or custom tweaks.
+
+* **GitHub Actions workflow** – aims to build the archive automatically.
 * **Manual steps (below)** – **tested and working**; follow them to obtain `bpftools-arm64.tar.gz`.
 
 ## Manual steps
@@ -94,7 +97,7 @@ bpftools/lib/
 ```
 ---
 
-## What the workflow does — *currently not working*
+## What the workflow does
 
 1. Check out this wrapper repository.  
 2. Clone `facebookexperimental/ExtendedAndroidTools` (shallow).  
