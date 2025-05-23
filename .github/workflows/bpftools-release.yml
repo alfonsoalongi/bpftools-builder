@@ -2,7 +2,7 @@ name: Build bpftools archive (arm64)
 
 on:
   push:
-    tags: [ 'v*' ]          # es. v1.7.0
+    tags: [ 'v*' ]
   workflow_dispatch:
 
 jobs:
@@ -10,14 +10,10 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 300
     steps:
-      ######################################################################
-      # 0) Repo (può essere vuoto) – serve solo per .github/                #
-      ######################################################################
+      # 0) Checkout
       - uses: actions/checkout@v4
 
-      ##############################################################
-      # 1) Swap: 4 GB per stare tranquilli con THREADS=4            #
-      ##############################################################
+      # 1) Swap: 4 GB             #
       - name: Add 4 GB swap
         run: |
           sudo fallocate -l 4G /swapfile
@@ -26,35 +22,31 @@ jobs:
           sudo swapon /swapfile
           free -h
 
-      ##############################################################
-      # 2) Clona ExtendedAndroidTools in ./src (shallow)            #
-      ##############################################################
+      # 2) Clona ExtendedAndroidTools in ./src (shallow)
       - name: Clone ExtendedAndroidTools
         run: git clone --depth 1 https://github.com/facebookexperimental/ExtendedAndroidTools.git src
 
-      ##############################################################
-      # 3) Dipendenze host                                         #
-      ##############################################################
+      # 3) Dipendenze host
       - name: Install dependencies
         run: sudo ./src/scripts/jammy-install-deps.sh
 
-      ######################################################################
-      # 3-bis) Tool extra per autoreconf di flex (autopoint / gettext)      #
-      ######################################################################
+      # 3-bis) Tool extra per autoreconf di flex (autopoint / gettext)
       - name: Extra build tools
         run: sudo apt-get update && sudo apt-get install -y autopoint gettext
 
-      ##############################################################
-      # 4) Scarica l’NDK (r26b di default)                         #
-      ##############################################################
+      # 4) Scarica l’NDK (r27b di default)
       - name: Download NDK
         run: ./src/scripts/download-ndk.sh
 
-      ########################################################################
-      # 5) Build bpftools arm64 – keep-alive + trace + cleanup dopo host     #
-      ########################################################################
+      # 5) Build bpftools arm64 – keep-alive + trace + cleanup dopo hos
       - name: Build bpftools (arm64)
         working-directory: ./src
+        env:
+          # 1) flag di configure che elimina la suite di test
+          PYTHON_CONFIGURE_EXTRA: "--disable-test-modules --with-ensurepip=no"
+          # 2) -j1 **solo** per l'install di CPython host
+          # es. lock /usr/bin/install -c -m 644 /home/runner/work/bpftools-builder/bpftools-builder/src/projects/python/sources/Lib/tkinter/test/test_tkinter/test_widgets.py /home/runner/work/bpftools-builder/bpftools-builder/src/out/host/lib/python3.10/tkinter/test/test_tkinter
+          PYTHON_INSTALL_MAKEFLAGS: "-j1"
         run: |
           set -e
           set -x
@@ -80,25 +72,19 @@ jobs:
           kill $KEEP
           cp bpftools-arm64.tar.gz $GITHUB_WORKSPACE/
 
-      ##############################################################
-      # 6) SHA256                                                  #
-      ##############################################################
+      # 6) SHA256
       - name: SHA256
         run: |
           cd $GITHUB_WORKSPACE
           sha256sum bpftools-arm64.tar.gz > SHA256SUMS
 
-      ##############################################################
-      # 7) Artifact temporaneo (debug)                             #
-      ##############################################################
+      # 7) Artifact temporaneo (debug)
       - uses: actions/upload-artifact@v4
         with:
           name: bpftools-arm64.tar.gz
           path: bpftools-arm64.tar.gz
 
-      ##############################################################
-      # 8) Asset permanente in Release (solo sui tag v*)           #
-      ##############################################################
+      # 8) Asset permanente in Release (solo sui tag v*)
       - name: Upload Release asset
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
