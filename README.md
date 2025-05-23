@@ -1,84 +1,107 @@
 # bpftools‑arm64 automated builder
 
-This repository is a tiny **wrapper** around
-[`facebookexperimental/ExtendedAndroidTools`](https://github.com/facebookexperimental/ExtendedAndroidTools)
-that builds **bpftools** for the **Android ARM64 (aarch64)** architecture manually or with a workflow
-and publishes the result as a GitHub Release asset.
+This repository is a **tiny wrapper** around  
+[facebookexperimental/ExtendedAndroidTools](https://github.com/facebookexperimental/ExtendedAndroidTools).  
+It builds **bpftools** for **Android ARM64 (aarch64)** and publishes the resulting archive.
+
+---
 
 ## Why?
 
-* **Zero‑maintenance** binary drops — press a button or push a tag and get
-  `bpftools-arm64.tar.gz`.
-* **Free**: public repositories have unlimited GitHub Actions minutes.
-* **Reproducibility**: the Docker image + pinned upstream commit guarantee
-  identical toolchains across runs.
+* **Zero‑maintenance**: press a button or push a tag and get a fresh `bpftools-arm64.tar.gz`.
+* **Free CI minutes**: public projects enjoy unlimited GitHub Actions time.
+* **Reproducible**: Docker image + pinned upstream commit guarantee the same tool‑chain every run.
+
+---
+
+## Current status
+
+* **GitHub Actions workflow** – aims to build the archive automatically **but is currently failing** (Reasons under investigation).
+* **Manual steps (below)** – **tested and working**; follow them to obtain `bpftools-arm64.tar.gz`.
 
 ## Manual steps
 
-#  Output in: bpftools-arm64.tar.gz
+The archive is generated as **`bpftools-arm64.tar.gz`** in the project root.
 
-# All the steps does not work
-@see my issue "make bpftools build fails: ld.lld: error: unable to find library -lLLVM when linking bpftrace-aotrt" at  https://github.com/facebookexperimental/ExtendedAndroidTools/issues/115
-make bpftools THREADS=$(nproc)
-make bpftools-min THREADS=$(nproc)
+---
 
-## A · Build completo con libLLVM monolitica - IT WORKS
+### Commands that **currently fail**
+
+@see my issue **“make bpftools build fails: ld.lld: error: unable to find library ‑lLLVM when linking bpftrace‑aotrt”**  
+<https://github.com/facebookexperimental/ExtendedAndroidTools/issues/115>
+
+```bash
+make bpftools      THREADS=$(nproc)   # fails
+make bpftools-min  THREADS=$(nproc)   # fails
+```
+
+---
+
+### A · Full build with monolithic **libLLVM.so** – **WORKS**
 
 ```bash
 git clone https://github.com/facebookexperimental/ExtendedAndroidTools.git
 cd ExtendedAndroidTools
 
-# Crea l’immagine (una sola volta)
+# Build the Docker image (once)
 ./scripts/build-docker-image.sh
 
-# 1. Avvia l’ambiente
+# Enter the build environment
 ./scripts/run-docker-build-env.sh
 
-# 2 Pulisce l''ambiente (opzionale)
+# Clean previous artefacts (optional)
 make clean
 
-# 3.Si ferma se trova un errore e attiva il tracing
-set -e;
-set -x;
+# Enable strict shell and tracing
+set -e
+set -x
 
-# 4. Compila solo l’LLVM host (dylib monolitica + Clang)
-make llvm HOST_ONLY=1 \
-  LLVM_EXTRA_CMAKE_FLAGS='-DLLVM_BUILD_LLVM_DYLIB=ON -DLLVM_LINK_LLVM_DYLIB=ON -DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra"' \
-  THREADS=$(nproc)
+# Re‑build LLVM + Clang for the host (creates libLLVM.so)
+make llvm HOST_ONLY=1   LLVM_EXTRA_CMAKE_FLAGS='-DLLVM_BUILD_LLVM_DYLIB=ON -DLLVM_LINK_LLVM_DYLIB=ON -DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra"'   THREADS=$(nproc)
 
-# 5. Compila bpftools per arm64
+# Build bpftools for Android ARM64
 make bpftools NDK_ARCH=arm64 THREADS=$(nproc)
+```
 
+---
 
-## B · Build “slim” solo bcc-tools (skip AOT) - NON PROVATA
+### B · “Slim” build – BCC tools only (skip AOT) – **NOT TESTED**
 
-# Compila tutto in un colpo (niente rebuild LLVM)
-
+```bash
 export SKIP_AOT=1
 make bpftools NDK_ARCH=arm64 THREADS=$(nproc)
+```
 
+---
 
-# Verifica build manuale
-# dovresti vedere: bpftools/bin/tcpconnect, tcpconnect6, … ecc.
+### Verify the manual build
+
+```bash
 tar -tf bpftools-arm64.tar.gz | head
+```
 
+You should see entries such as `bpftools/bin/tcpconnect`.
 
-## What the workflow does - Currently the workflow does not works!
+---
 
-1. Checks out this wrapper repository (tiny).
-2. Clones `facebookexperimental/ExtendedAndroidTools` at depth 1.
-3. Builds the project’s Docker image (`./scripts/build-docker-image.sh`).
-4. Compiles **bpftools** inside the container for `NDK_ARCH=arm64`.
-5. Uploads `out/archives/bpftools-arm64.tar.gz` as:
-   * a workflow *artifact* (always), and
-   * a Release asset (on tag / manual dispatch).
-6. *(Optional)* Signs the tarball with [Sigstore Cosign] if the secret
-   `COSIGN_KEY` is configured.
+## What the workflow does — *currently not working*
 
-## How to trigger a build 
+1. Check out this wrapper repository.  
+2. Clone `facebookexperimental/ExtendedAndroidTools` (shallow).  
+3. Build the project’s Docker image.  
+4. Compile **bpftools** inside the container for `NDK_ARCH=arm64`.  
+5. Upload `bpftools-arm64.tar.gz` as  
+   * a workflow artefact (always), and  
+   * a Release asset (on tag / manual dispatch).  
+6. *(Optional)* Sign the tarball with Sigstore Cosign if `COSIGN_KEY` is provided.
 
-Create a tag
+---
+
+## How to trigger a build
+
+```bash
 git tag v0.0.1
 git push origin v0.0.1
+```
 
-
+A GitHub Actions run starts and attaches `bpftools-arm64.tar.gz` to the corresponding Release page.
