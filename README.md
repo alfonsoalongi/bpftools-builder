@@ -79,6 +79,8 @@ make bpftools NDK_ARCH=arm64 THREADS=$(nproc)
 ```bash
 tar -tf bpftools-arm64.tar.gz | head
 ```
+Output:
+```
 bpftools/
 bpftools/bin/
 bpftools/bin/bpftrace
@@ -89,6 +91,7 @@ bpftools/bin/python3.10
 bpftools/bin/python3.10-config
 bpftools/bin/xzcat
 bpftools/lib/
+```
 ---
 
 ## What the workflow does — *currently not working*
