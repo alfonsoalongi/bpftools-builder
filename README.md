@@ -2,7 +2,7 @@
 
 This repository is a tiny **wrapper** around
 [`facebookexperimental/ExtendedAndroidTools`](https://github.com/facebookexperimental/ExtendedAndroidTools)
-that builds **bpftools** for the **Android ARM64 (aarch64)** architecture
+that builds **bpftools** for the **Android ARM64 (aarch64)** architecture manually or with a workflow
 and publishes the result as a GitHub Release asset.
 
 ## Why?
@@ -13,17 +13,57 @@ and publishes the result as a GitHub Release asset.
 * **Reproducibility**: the Docker image + pinned upstream commit guarantee
   identical toolchains across runs.
 
-## How to trigger a build
+## Manual steps
+
+#  Output in: bpftools-arm64.tar.gz
+
+# All the steps does not work
+@see my issue "make bpftools build fails: ld.lld: error: unable to find library -lLLVM when linking bpftrace-aotrt" at  https://github.com/facebookexperimental/ExtendedAndroidTools/issues/115
+make bpftools THREADS=$(nproc)
+make bpftools-min THREADS=$(nproc)
+
+## A · Build completo con libLLVM monolitica - IT WORKS
+
+```bash
+git clone https://github.com/facebookexperimental/ExtendedAndroidTools.git
+cd ExtendedAndroidTools
+
+# Crea l’immagine (una sola volta)
+./scripts/build-docker-image.sh
+
+# 1. Avvia l’ambiente
+./scripts/run-docker-build-env.sh
+
+# 2 Pulisce l''ambiente (opzionale)
+make clean
+
+# 3.Si ferma se trova un errore e attiva il tracing
+set -e;
+set -x;
+
+# 4. Compila solo l’LLVM host (dylib monolitica + Clang)
+make llvm HOST_ONLY=1 \
+  LLVM_EXTRA_CMAKE_FLAGS='-DLLVM_BUILD_LLVM_DYLIB=ON -DLLVM_LINK_LLVM_DYLIB=ON -DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra"' \
+  THREADS=$(nproc)
+
+# 5. Compila bpftools per arm64
+make bpftools NDK_ARCH=arm64 THREADS=$(nproc)
 
 
-| Trigger                                         | What happens                                                            |
-| ------------------------------------------------- | ------------------------------------------------------------------------- |
-| **Manual** (`Run workflow` in the Actions tab) | Build & release using the*tag* you enter.                               |
-| **Push a Git tag** like `v1.3.0`                | Build & release under that tag automatically.                           |
-| **Pull request**                                | Builds the tarball and uploads it as an*artifact* (no release).         |
-| **Weekly schedule** (Sunday 03:00 UTC)         | Rebuilds against the latest upstream and updates the release if needed. |
+## B · Build “slim” solo bcc-tools (skip AOT) - NON PROVATA
 
-## What the workflow does
+# Compila tutto in un colpo (niente rebuild LLVM)
+
+export SKIP_AOT=1
+make bpftools NDK_ARCH=arm64 THREADS=$(nproc)
+
+
+# Verifica build manuale
+# dovresti vedere: bpftools/bin/tcpconnect, tcpconnect6, … ecc.
+tar -tf bpftools-arm64.tar.gz | head
+
+
+## What the workflow does - Currently the workflow does not works!
 
 1. Checks out this wrapper repository (tiny).
 2. Clones `facebookexperimental/ExtendedAndroidTools` at depth 1.
@@ -35,45 +75,10 @@ and publishes the result as a GitHub Release asset.
 6. *(Optional)* Signs the tarball with [Sigstore Cosign] if the secret
    `COSIGN_KEY` is configured.
 
-## Manual steps
+## How to trigger a build 
 
-```bash
-git clone https://github.com/facebookexperimental/ExtendedAndroidTools.git
-cd ExtendedAndroidTools
-# Build the Docker image
-./scripts/build-docker-image.sh
-# Run the environment
-./scripts/run-docker-build-env.sh
-# Create the artifact in out/archives/bpftools-arm64.tar.gz
-
-# All solutions does not work
-make bpftools THREADS=$(nproc)
-make bpftools-min THREADS=$(nproc)
+Create a tag
+git tag v0.0.1
+git push origin v0.0.1
 
 
-make llvm LLVM_EXTRA_CMAKE_FLAGS='-DLLVM_BUILD_LLVM_DYLIB=ON -DLLVM_LINK_LLVM_DYLIB=ON' 
-make bpftools
-```
-
-## Extra goodies
-
-* **Docker‑layer caching** – uncomment the stub in the workflow to shave
-  minutes off repeated builds.
-  It uses `actions/cache` + Buildx’s `--cache-from/--cache-to`.
-* **Weekly rebuilds** – already enabled; adjust the `cron:` as needed.
-* **Pull‑request verification** – every PR gets a fresh artifact so you can
-  test before merging or tagging.
-* **Release signing (Cosign)** – add an encrypted private key as secret
-  `COSIGN_KEY`, then enable the step to attach a detached signature.
-
-> 💡 *Multi‑architecture builds* were intentionally left out — this wrapper
-> focuses solely on the Android ARM64 target.
-
-## Getting the binaries
-
-Head to **Releases** → download `bpftools-arm64.tar.gz`, or grab the artifact
-from the latest workflow run for quick, pre‑release testing.
-
----
-
-© 2025. Released under the MIT License.
