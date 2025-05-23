@@ -76,17 +76,57 @@ jobs:
           kill $KEEP
           cp bpftools-arm64.tar.gz $GITHUB_WORKSPACE/
 
+
+      # 5-bis) Build bpftools-min arm64
+      - name: Build bpftools-min (arm64)
+        working-directory: ./src
+        env:
+          # 1) flag di configure che elimina la suite di test
+          PYTHON_CONFIGURE_EXTRA: "--disable-test-modules --with-ensurepip=no"
+          # 2) -j1 **solo** per l'install di CPython host
+          PYTHON_INSTALL_MAKEFLAGS: "-j1"
+        run: |
+          set -e
+          set -x
+
+          ( while true; do
+              echo "::notice ::⏳ $(date -u) — build alive"
+              sleep 300
+            done ) &
+          KEEP=$!
+
+          export GIT_DEPTH=0
+          # clone completo per bpftrace
+
+          NDK_DIR=$(ls -d ../android-ndk-*)
+          echo "Using NDK_DIR=$NDK_DIR"
+
+          make bpftools-min NDK_ARCH=arm64 NDK_PATH=$NDK_DIR THREADS=$(nproc)
+
+          # libera ~7 GB di build/host adesso che non serve più
+          rm -rf build/host
+          df -h .
+
+          kill $KEEP
+          cp bpftools-min-arm64.tar.gz $GITHUB_WORKSPACE/
+
       # 6) SHA256
       - name: SHA256
         run: |
           cd $GITHUB_WORKSPACE
-          sha256sum bpftools-arm64.tar.gz > SHA256SUMS
+          sha256sum bpftools-arm64.tar.gz bpftools-min-arm64.tar.gz > SHA256SUMS
 
       # 7) Artifact temporaneo (debug)
       - uses: actions/upload-artifact@v4
         with:
           name: bpftools-arm64.tar.gz
           path: bpftools-arm64.tar.gz
+
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bpftools-min-arm64.tar.gz
+          path: bpftools-min-arm64.tar.gz
 
       # 8) Asset permanente in Release (solo sui tag v*)
       - name: Upload Release asset
@@ -95,5 +135,6 @@ jobs:
         with:
           files: |
             bpftools-arm64.tar.gz
+            bpftools-min-arm64.tar.gz
             SHA256SUMS
           generate_release_notes: true
