@@ -2,8 +2,8 @@ name: Build bpftools archive (arm64)
 
 on:
   push:
-    tags: [ 'v*' ]          # es. v1.6.0
-  workflow_dispatch:        # avvio manuale se serve
+    tags: [ 'v*' ]          # es. v1.7.0
+  workflow_dispatch:
 
 jobs:
   build_bpftools:
@@ -11,12 +11,12 @@ jobs:
     timeout-minutes: 300
     steps:
       ######################################################################
-      # 0) Il tuo repo (può essere vuoto) – serve solo per avere .github/   #
+      # 0) Repo (può essere vuoto) – serve solo per .github/                #
       ######################################################################
       - uses: actions/checkout@v4
 
       ##############################################################
-      # 1) Aggiungi 4 GB di swap per evitare OOM durante il link    #
+      # 1) Swap: 4 GB per stare tranquilli con THREADS=4            #
       ##############################################################
       - name: Add 4 GB swap
         run: |
@@ -33,7 +33,7 @@ jobs:
         run: git clone --depth 1 https://github.com/facebookexperimental/ExtendedAndroidTools.git src
 
       ##############################################################
-      # 3) Installa le dipendenze host (script upstream)            #
+      # 3) Dipendenze host                                         #
       ##############################################################
       - name: Install dependencies
         run: sudo ./src/scripts/jammy-install-deps.sh
@@ -45,26 +45,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y autopoint gettext
 
       ##############################################################
-      # 4) Scarica l’NDK (di default r26b)                          #
+      # 4) Scarica l’NDK (r26b di default)                         #
       ##############################################################
       - name: Download NDK
         run: ./src/scripts/download-ndk.sh
 
       ########################################################################
-      # 5) Build tool-chain HOST (llvm/clang/python) con 4 thread            #
-      #    —> RAM 7-8 GB.  Poi cancelliamo build/host per spazio.            #
-      ########################################################################
-      - name: Build host tool-chain & cleanup
-        working-directory: ./src
-        run: |
-          set -e
-          make host-llvm host-clang host-python THREADS=4
-          echo "Disk before cleanup:"; df -h .
-          rm -rf build/host
-          echo "Disk after cleanup:"; df -h .
-
-      ########################################################################
-      # 6) Build bpftools arm64 – keep-alive + trace + NDK dinamico          #
+      # 5) Build bpftools arm64 – keep-alive + trace + cleanup dopo host     #
       ########################################################################
       - name: Build bpftools (arm64)
         working-directory: ./src
@@ -72,28 +59,29 @@ jobs:
           set -e
           set -x
 
-          # keep-alive: stampa ogni 5 minuti
+          # keep-alive: ping ogni 5 min
           ( while true; do
               echo "::notice ::⏳ $(date -u) — build alive"
               sleep 300
             done ) &
           KEEP=$!
 
-          # full clone per bpftrace (cherry-pick)
-          export GIT_DEPTH=0
+          export GIT_DEPTH=0          # clone completo per bpftrace
 
-          # trova la cartella NDK appena estratta
           NDK_DIR=$(ls -d ../android-ndk-*)
           echo "Using NDK_DIR=$NDK_DIR"
 
-          # THREADS=4 per build più veloce
           make bpftools NDK_ARCH=arm64 NDK_PATH=$NDK_DIR THREADS=4
+
+          # libera ~7 GB di build/host adesso che non serve più
+          rm -rf build/host
+          df -h .
 
           kill $KEEP
           cp bpftools-arm64.tar.gz $GITHUB_WORKSPACE/
 
       ##############################################################
-      # 7) Genera SHA256                                           #
+      # 6) SHA256                                                  #
       ##############################################################
       - name: SHA256
         run: |
@@ -101,7 +89,7 @@ jobs:
           sha256sum bpftools-arm64.tar.gz > SHA256SUMS
 
       ##############################################################
-      # 8) Artifact temporaneo (debug)                             #
+      # 7) Artifact temporaneo (debug)                             #
       ##############################################################
       - uses: actions/upload-artifact@v4
         with:
@@ -109,7 +97,7 @@ jobs:
           path: bpftools-arm64.tar.gz
 
       ##############################################################
-      # 9) Asset permanente in Release (solo sui tag v*)           #
+      # 8) Asset permanente in Release (solo sui tag v*)           #
       ##############################################################
       - name: Upload Release asset
         if: startsWith(github.ref, 'refs/tags/v')
