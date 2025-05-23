@@ -5,6 +5,10 @@ on:
     tags: [ 'v*' ]
   workflow_dispatch:
 
+ # Consente al token integrato di scrivere la Release
+permissions:         
+  contents: write
+
 jobs:
   build_bpftools:
     runs-on: ubuntu-22.04

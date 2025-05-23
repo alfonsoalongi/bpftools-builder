@@ -3,7 +3,7 @@
 This repository is a **tiny wrapper** around  
 [facebookexperimental/ExtendedAndroidTools](https://github.com/facebookexperimental/ExtendedAndroidTools).  
 It builds **bpftools** for **Android ARM64 (aarch64)** and publishes the resulting archive.
-
+[@see my issue "Feature request: publish pre-built Android binaries as GitHub **Releases**"](https://github.com/facebookexperimental/ExtendedAndroidTools/issues/116)
 ---
 
 ## Why?
